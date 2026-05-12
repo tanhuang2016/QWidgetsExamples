@@ -59,6 +59,8 @@ void PaginationWidget::setTotalCount(int totalCount)
     if (m_currentPage > pageCount()) {
         m_currentPage = pageCount();
     }
+    // Changing total count should update labels/buttons, but should not emit
+    // pageChanged by itself. The owner may call this during rendering.
     updateState(false);
 }
 
@@ -93,6 +95,7 @@ void PaginationWidget::pageSizeChanged()
 
 void PaginationWidget::updateState(bool emitChange)
 {
+    // Keep page number valid even when page size or total count changes.
     const int pages = pageCount();
     m_currentPage = qBound(1, m_currentPage, pages);
     m_pageSpin->setMaximum(pages);

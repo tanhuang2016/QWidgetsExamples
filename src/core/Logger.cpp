@@ -12,6 +12,8 @@ const qint64 MaxLogSize = 1024 * 1024;
 
 QString logPath()
 {
+    // Logs are placed beside the executable, not in the source tree. This works
+    // for local builds, installed apps and portable archives.
     QDir dir(QCoreApplication::applicationDirPath());
     if (!dir.exists("logs")) {
         dir.mkpath("logs");
@@ -28,6 +30,8 @@ void Logger::fatal(const QString &message) { log(LogLevel::Fatal, message); }
 
 void Logger::log(LogLevel level, const QString &message)
 {
+    // Multiple Qt threads could log at the same time. The mutex prevents
+    // interleaved writes to app.log.
     QMutexLocker locker(&mutex());
     const QString path = logPath();
     rotateIfNeeded(path);
@@ -52,6 +56,8 @@ void Logger::log(LogLevel level, const QString &message)
 
 void Logger::messageHandler(QtMsgType type, const QMessageLogContext &, const QString &message)
 {
+    // Qt calls this function for qDebug(), qInfo(), qWarning(), qCritical()
+    // and qFatal() after qInstallMessageHandler() is installed in main().
     switch (type) {
     case QtDebugMsg:
         debug(message);
@@ -90,6 +96,7 @@ QString Logger::levelName(LogLevel level)
 
 void Logger::rotateIfNeeded(const QString &path)
 {
+    // Simple size-based rotation keeps the demo log from growing forever.
     QFileInfo info(path);
     if (!info.exists() || info.size() < MaxLogSize) {
         return;

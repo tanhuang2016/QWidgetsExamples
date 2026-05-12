@@ -39,6 +39,8 @@ void NavigationPanel::retranslateUi()
     clear();
     ControlRegistry &registry = AppContext::instance().registry();
     for (const QString &groupKey : registry.groups()) {
+        // Top-level item: category/group. It is not selectable; users select
+        // concrete child pages.
         QTreeWidgetItem *group = new QTreeWidgetItem(this);
         group->setText(0, registry.groupTitle(groupKey));
         group->setFlags(group->flags() & ~Qt::ItemIsSelectable);
@@ -49,6 +51,8 @@ void NavigationPanel::retranslateUi()
             }
             QTreeWidgetItem *item = new QTreeWidgetItem(group);
             item->setText(0, registry.title(key));
+            // Store the page key separately from display text. Display text can
+            // change with language; the key remains stable.
             item->setData(0, Qt::UserRole, key);
             group->addChild(item);
         }

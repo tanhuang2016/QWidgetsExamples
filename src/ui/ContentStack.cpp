@@ -16,6 +16,7 @@ ContentStack::ContentStack(QWidget *parent)
 void ContentStack::showPage(const QString &key)
 {
     try {
+        // loadPage() performs lazy creation and returns a cached QWidget.
         ControlPageBase *page = loadPage(key);
         setCurrentWidget(page);
     } catch (const std::exception &e) {
@@ -40,6 +41,7 @@ ControlPageBase *ContentStack::loadPage(const QString &key)
         return m_pages.value(key);
     }
 
+    // First visit: ask the registry to instantiate the concrete page class.
     ControlPageBase *page = AppContext::instance().registry().create(key);
     if (!page) {
         throw std::runtime_error("Page factory returned null.");

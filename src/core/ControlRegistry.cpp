@@ -15,6 +15,8 @@ void ControlRegistry::registerPage(const QString &group, const QString &key, con
     if (key.trimmed().isEmpty() || !factory) {
         throw std::runtime_error("Invalid page registration.");
     }
+
+    // Keep explicit order lists because QHash is intentionally unordered.
     if (!m_groupOrder.contains(group)) {
         m_groupOrder.append(group);
     }
@@ -87,6 +89,9 @@ QString ControlRegistry::groupOf(const QString &key) const
 
 QString ControlRegistry::title(const QString &key) const
 {
+    // The registry stores fallback titles, but this switch-like mapping keeps
+    // visible titles translated even after runtime language changes. We avoid
+    // using it for page creation; creation still uses the registered factory.
     if (key == "buttons") {
         return QObject::tr("Buttons");
     }
@@ -137,5 +142,6 @@ ControlPageBase *ControlRegistry::create(const QString &key) const
     if (!m_entries.contains(key)) {
         throw std::runtime_error(QString("Page not found: %1").arg(key).toStdString());
     }
+    // The factory hides the concrete C++ type from the caller.
     return m_entries.value(key).factory();
 }

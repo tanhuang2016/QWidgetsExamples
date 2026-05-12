@@ -9,6 +9,10 @@
 namespace {
 QStringList translationSearchPaths()
 {
+    // Different packaging formats place resources in different locations:
+    // - local/debug build: exe/resources/translations
+    // - installed Windows/Linux tree: bin/../resources/translations
+    // - macOS app bundle: Contents/MacOS/../Resources/translations
     const QDir appDir(QCoreApplication::applicationDirPath());
     QStringList paths;
     paths << appDir.filePath("resources/translations");
@@ -46,6 +50,7 @@ bool TranslationManager::switchLanguage(const QString &locale)
     bool loaded = true;
     if (locale != "en_US") {
         loaded = false;
+        // QTranslator::load("zh_CN", path) looks for zh_CN.qm in path.
         for (const QString &basePath : translationSearchPaths()) {
             if (m_translator.load(locale, basePath)) {
                 loaded = true;
@@ -57,10 +62,12 @@ bool TranslationManager::switchLanguage(const QString &locale)
             Logger::warning(QString("Translation file not found for %1. Search paths: %2")
                             .arg(locale, translationSearchPaths().join("; ")));
         } else {
+            // The translator must be installed before widgets call tr() again.
             m_app->installTranslator(&m_translator);
         }
     }
 
+    // Pages listen to this signal and update visible text through retranslateUi().
     emit languageChanged();
     return loaded;
 }

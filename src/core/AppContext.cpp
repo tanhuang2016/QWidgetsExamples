@@ -35,7 +35,12 @@ void AppContext::initialize(QApplication *app)
         return;
     }
 
+    // TranslationManager is parented to QApplication, so Qt will delete it
+    // automatically when the application shuts down.
     m_translations = new TranslationManager(app);
+
+    // Register factories only once. Actual pages are created later by
+    // ContentStack when the user selects them.
     registerPages();
     m_initialized = true;
 }
@@ -52,6 +57,9 @@ TranslationManager &AppContext::translations()
 
 void AppContext::registerPages()
 {
+    // Each registration is: group key, page key, display title, factory lambda.
+    // The factory returns a heap-allocated QWidget; once inserted into
+    // QStackedWidget, Qt parent ownership manages its lifetime.
     m_registry.registerPage("basic", "buttons", QObject::tr("Buttons"), []() { return new ButtonPage(); });
     m_registry.registerPage("basic", "inputs", QObject::tr("Inputs"), []() { return new InputPage(); });
     m_registry.registerPage("data", "views", QObject::tr("Views"), []() { return new ViewPage(); });
