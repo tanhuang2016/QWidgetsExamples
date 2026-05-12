@@ -4,6 +4,22 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QStringList>
+
+namespace {
+QStringList translationSearchPaths()
+{
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    QStringList paths;
+    paths << appDir.filePath("resources/translations");
+    paths << appDir.filePath("../resources/translations");
+    paths << appDir.filePath("../../resources/translations");
+    paths << appDir.filePath("../../../resources/translations");
+    paths << QDir(QCoreApplication::applicationDirPath() + "/../Resources").filePath("translations");
+    paths.removeDuplicates();
+    return paths;
+}
+}
 
 TranslationManager::TranslationManager(QApplication *app, QObject *parent)
     : QObject(parent),
@@ -29,12 +45,19 @@ bool TranslationManager::switchLanguage(const QString &locale)
 
     bool loaded = true;
     if (locale != "en_US") {
-        const QString basePath = QDir(QCoreApplication::applicationDirPath()).filePath("resources/translations");
-        loaded = m_translator.load(locale, basePath);
-        if (loaded) {
-            m_app->installTranslator(&m_translator);
+        loaded = false;
+        for (const QString &basePath : translationSearchPaths()) {
+            if (m_translator.load(locale, basePath)) {
+                loaded = true;
+                Logger::info(QString("Loaded translation %1 from %2").arg(locale, basePath));
+                break;
+            }
+        }
+        if (!loaded) {
+            Logger::warning(QString("Translation file not found for %1. Search paths: %2")
+                            .arg(locale, translationSearchPaths().join("; ")));
         } else {
-            Logger::warning(QString("Translation file not found for %1").arg(locale));
+            m_app->installTranslator(&m_translator);
         }
     }
 
