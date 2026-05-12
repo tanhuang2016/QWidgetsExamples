@@ -8,10 +8,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   APP_NAME: qt_codex1
+  PACKAGE_NAME: QWidgetsExamples
   QT_VERSION: "6.8.3"
 
 jobs:
@@ -25,7 +26,7 @@ jobs:
           - name: linux-x64
             os: linux
             runner: ubuntu-24.04
-            arch: x64
+            arch: x86_64
           - name: linux-arm64
             os: linux
             runner: ubuntu-24.04-arm
@@ -33,7 +34,7 @@ jobs:
           - name: macos-x64
             os: macos
             runner: macos-15-intel
-            arch: x64
+            arch: x86_64
           - name: macos-arm64
             os: macos
             runner: macos-15
@@ -41,19 +42,24 @@ jobs:
           - name: windows-x64
             os: windows
             runner: windows-2022
-            arch: x64
+            arch: x86_64
             msvc_arch: x64
             qt_arch: win64_msvc2022_64
-          - name: windows-arm64
-            os: windows
-            runner: windows-2022
-            arch: arm64
-            msvc_arch: amd64_arm64
-            qt_arch: win64_msvc2022_arm64_cross_compiled
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Compute package metadata
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="dev-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "PACKAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "QT_LABEL=qt${QT_VERSION}" >> "$GITHUB_ENV"
 
       - name: Install Linux dependencies
         if: matrix.os == 'linux'
@@ -160,7 +166,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path "stage\*" -DestinationPath "dist\qt_codex1-windows-${{ matrix.arch }}-portable.zip" -Force
+          $outFile = "dist\${{ env.PACKAGE_NAME }}_windows_${{ matrix.arch }}_$($env:PACKAGE_VERSION)_$($env:QT_LABEL).zip"
+          Compress-Archive -Path "stage\*" -DestinationPath $outFile -Force
 
       - name: Create Windows installer
         if: matrix.os == 'windows'
@@ -170,37 +177,37 @@ jobs:
           makensis `
             /DAPP_NAME=qt_codex1 `
             /DAPP_EXE=qt_codex1.exe `
-            /DAPP_VERSION=1.0.0 `
+            /DAPP_VERSION=$env:PACKAGE_VERSION `
             /DAPP_ARCH=${{ matrix.arch }} `
             /DSTAGE_DIR="$PWD\stage" `
-            /DOUT_FILE="$PWD\dist\qt_codex1-windows-${{ matrix.arch }}-setup.exe" `
+            /DOUT_FILE="$PWD\dist\${{ env.PACKAGE_NAME }}_windows_${{ matrix.arch }}_$($env:PACKAGE_VERSION)_$($env:QT_LABEL)_setup.exe" `
             packaging\windows\installer.nsi
 
       - name: Create macOS portable archive
         if: matrix.os == 'macos'
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "stage/qt_codex1.app" "dist/qt_codex1-macos-${{ matrix.arch }}-portable.zip"
+          ditto -c -k --sequesterRsrc --keepParent "stage/qt_codex1.app" "dist/${{ env.PACKAGE_NAME }}_macos_${{ matrix.arch }}_${PACKAGE_VERSION}_${QT_LABEL}.zip"
 
       - name: Create macOS DMG installer
         if: matrix.os == 'macos'
         run: |
           mkdir -p dist
           macdeployqt "stage/qt_codex1.app" -dmg -verbose=1
-          mv "stage/qt_codex1.dmg" "dist/qt_codex1-macos-${{ matrix.arch }}.dmg"
+          mv "stage/qt_codex1.dmg" "dist/${{ env.PACKAGE_NAME }}_macos_${{ matrix.arch }}_${PACKAGE_VERSION}_${QT_LABEL}.dmg"
 
       - name: Create Linux portable archive
         if: matrix.os == 'linux'
         run: |
           mkdir -p dist
-          tar -C stage -czf "dist/qt_codex1-linux-${{ matrix.arch }}-portable.tar.gz" .
+          tar -C stage -czf "dist/${{ env.PACKAGE_NAME }}_linux_${{ matrix.arch }}_${PACKAGE_VERSION}_${QT_LABEL}.tar.gz" .
 
       - name: Create Linux DEB installer
         if: matrix.os == 'linux'
         run: |
           cmake --build build --target package --config Release
           mkdir -p dist
-          cp build/*.deb "dist/qt_codex1-linux-${{ matrix.arch }}.deb"
+          cp build/*.deb "dist/${{ env.PACKAGE_NAME }}_linux_${{ matrix.arch }}_${PACKAGE_VERSION}_${QT_LABEL}.deb"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -208,3 +215,27 @@ jobs:
           name: qt_codex1-${{ matrix.name }}
           path: dist/*
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    needs: package
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: QWidgetsExamples ${{ github.ref_name }}
+          files: release-assets/*
+          body: |
+            QWidgetsExamples ${{ github.ref_name }}
+
+            Built with Qt ${{ env.QT_VERSION }}.
+
+            Packages include installer and portable builds for Windows, macOS, and Linux.
